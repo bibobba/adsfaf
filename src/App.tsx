@@ -4,7 +4,7 @@ import { supabase } from './lib/supabase';
 import './styles.css';
 
 type Role = 'student' | 'teacher';
-type Tab = 'home' | 'search' | 'events' | 'chat' | 'profile' | 'moderation';
+type Tab = 'home' | 'search' | 'events' | 'chat' | 'profile' | 'moderation' | 'class';
 
 type User = {
   id: string; name: string; role: Role; className: string; city: string; bio: string;
@@ -80,10 +80,10 @@ export default function App() {
       {tab==='home'&&<Home me={me} events={events} joined={joined} toggle={toggleJoin}/>}
       {tab==='search'&&<Search q={q} setQ={setQ} results={results} open={setSelected}/>}
       {tab==='events'&&<Events events={events} joined={joined} toggle={toggleJoin}/>}
-      {tab==='chat'&&<Chat/>}{tab==='moderation'&&role==='teacher'&&<ModerationPanel me={me} onChanged={loadData}/>} {role==='teacher'&&tab==='events'&&<TeacherPanel me={me} onCreated={loadData}/>} 
+      {tab==='chat'&&<Chat/>}{tab==='moderation'&&role==='teacher'&&<ModerationPanel me={me} onChanged={loadData}/>} {tab==='class'&&<ClassPanel me={me}/>}  {role==='teacher'&&tab==='events'&&<TeacherPanel me={me} onCreated={loadData}/>} 
       {tab==='profile'&&<Profile me={me} bought={bought} buy={n=>setBought(v=>v.includes(n)?v:[...v,n])}/>}
     </main>
-    <nav>{([['home','⌂','Главная'],['search','⌕','Люди'],['events','✦','Ивенты'],['chat','◌','Чаты'],['profile','◉','Профиль'],...(role==='teacher'?[['moderation','✓','Заявки']]:[])] as const).map(x=><button className={tab===x[0]?'on':''} onClick={()=>setTab(x[0])} key={x[0]}><span>{x[1]}</span><small>{x[2]}</small></button>)}</nav>
+    <nav>{([['home','⌂','Главная'],['search','⌕','Люди'],['events','✦','Ивенты'],['chat','◌','Чаты'],['profile','◉','Профиль'],['class','🏫','Класс'],...(role==='teacher'?[['moderation','✓','Заявки']]:[])] as const).map(x=><button className={tab===x[0]?'on':''} onClick={()=>setTab(x[0])} key={x[0]}><span>{x[1]}</span><small>{x[2]}</small></button>)}</nav>
     {selected&&<div className="modal"><div><Profile me={selected} bought={[]} buy={()=>{}} compact/><Button stretched mode="secondary" onClick={()=>setSelected(null)}>Закрыть</Button></div></div>}
   </div>;
 }
@@ -100,6 +100,32 @@ function Title({t}:{t:string}){return <h2>{t}<button>Все →</button></h2>}
 function Event({e,joined,toggle}:{e:readonly (string|number)[];joined:boolean;toggle:(id:string)=>void}){return <article className="event"><div className="cover">{e[5]}</div><div><small>{e[2]} · {e[3]}</small><h3>{e[1]}</h3><p>{e[4]}</p><footer><span>⚡ {e[6]} XP</span><span>🪙 {e[7]}</span><span>👥 {e[8]}</span><Button size="small" mode={joined?'secondary':'primary'} onClick={()=>toggle(String(e[0]))}>{joined?'Участвую':'Участвовать'}</Button></footer></div></article>}
 function Search({q,setQ,results,open}:{q:string;setQ:(s:string)=>void;results:User[];open:(u:User)=>void}){return <><Typography.Headline>Поиск людей</Typography.Headline><p className="sub">Имя, фамилия, класс или интерес.</p><SearchInput placeholder="Имя, фамилия, #Python, 8Б…" value={q} onChange={(e:any)=>setQ(e.target.value)}/><div className="chips">{['#Python','#Игры','#Фото','#Dota 2'].map(x=><button onClick={()=>setQ(x.slice(1))} key={x}>{x}</button>)}</div>{results.map(u=><button className="result" key={u.id} onClick={()=>open(u)}><Avatar.Container size={54} form="squircle"><Avatar.Image src={u.avatar}/></Avatar.Container><div><b>{u.name}</b><small>{u.className}</small><span>{u.tags.map(t=>'#'+t).join(' ')||'Профиль EDU.GAME'}</span></div><i>→</i></button>)}</>}
 function Events({events,joined,toggle}:{events:readonly (readonly [string,string,string,string,string,string,number,number,number])[];joined:string[];toggle:(id:string)=>void}){return <><Typography.Headline>Ивенты</Typography.Headline><p className="sub">Участие приносит XP, валюту и достижения.</p>{events.map(e=><Event e={e} joined={joined.includes(e[0])} toggle={toggle} key={e[0]}/>)}</>}
+function ClassPanel({me}:{me:User}){
+ const [name,setName]=useState(''); const [grade,setGrade]=useState('8Б'); const [members,setMembers]=useState<any[]>([]); const [message,setMessage]=useState('');
+ useEffect(()=>{load();},[]);
+ async function load(){
+   if(!supabase)return;
+   const {data}=await supabase.from('class_members').select('membership_role,profiles(id,full_name,role,avatar_url,xp)').limit(50);
+   setMembers(data||[]);
+ }
+ async function createClass(){
+   if(!supabase||!name.trim()){setMessage('Укажи название класса');return}
+   const {data,error}=await supabase.from('classes').insert({name:name.trim(),grade,school_name:'Школа'}).select('id').single();
+   if(error||!data){setMessage(error?.message||'Не удалось создать класс');return}
+   await supabase.from('class_members').upsert({class_id:data.id,profile_id:me.id,membership_role:'teacher'});
+   setMessage('Класс создан. Теперь можно добавлять учеников и назначать старосту.');
+   setName(''); await load();
+ }
+ async function makeModerator(profileId:string,classId:string){
+   if(!supabase)return;
+   await supabase.from('class_members').update({membership_role:'member'}).eq('class_id',classId).eq('membership_role','moderator');
+   await supabase.from('class_members').update({membership_role:'moderator'}).eq('class_id',classId).eq('profile_id',profileId);
+   await supabase.from('classes').update({moderator_id:profileId}).eq('id',classId);
+   setMessage('Староста назначен.'); await load();
+ }
+ return <section><Typography.Headline>Класс</Typography.Headline><p className="sub">Класс объединяет учеников, старосту, события и общий XP.</p>{roleCard(me)}<div className="creator"><h3>Создать класс</h3><input value={name} onChange={e=>setName(e.target.value)} placeholder="Например, 8Б"/><select value={grade} onChange={e=>setGrade(e.target.value)}><option>8Б</option><option>8А</option><option>9А</option><option>9Б</option><option>10А</option><option>11А</option></select><Button stretched onClick={createClass}>Создать класс</Button></div>{message&&<div className="form-message">{message}</div>}<div className="member-list">{members.map((m:any)=><div className="member-row" key={m.profiles.id}><Avatar.Container size={42} form="squircle"><Avatar.Image src={m.profiles.avatar_url||'https://i.pravatar.cc/100?img=12'}/></Avatar.Container><div><b>{m.profiles.full_name}</b><small>{m.membership_role==='moderator'?'⭐ Староста':m.membership_role==='teacher'?'🧑‍🏫 Учитель':'Ученик'} · {m.profiles.xp||0} XP</small></div>{m.membership_role!=='moderator'&&<Button size="small" mode="secondary" onClick={()=>makeModerator(m.profiles.id,'')}>Назначить</Button>}</div>)}</div></section>
+}
+function roleCard(me:User){return <div className="class-card"><b>{me.className}</b><span>Участники класса · общий XP</span></div>}
 function ModerationPanel({me,onChanged}:{me:User;onChanged:()=>void}){
  const [items,setItems]=useState<any[]>([]); const [busy,setBusy]=useState<string|null>(null);
  useEffect(()=>{load();},[]);
