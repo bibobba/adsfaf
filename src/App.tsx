@@ -4,7 +4,7 @@ import { supabase } from './lib/supabase';
 import './styles.css';
 
 type Role = 'student' | 'teacher';
-type Tab = 'home' | 'search' | 'events' | 'chat' | 'profile';
+type Tab = 'home' | 'search' | 'events' | 'chat' | 'profile' | 'moderation';
 
 type User = {
   id: string; name: string; role: Role; className: string; city: string; bio: string;
@@ -80,10 +80,10 @@ export default function App() {
       {tab==='home'&&<Home me={me} events={events} joined={joined} toggle={toggleJoin}/>}
       {tab==='search'&&<Search q={q} setQ={setQ} results={results} open={setSelected}/>}
       {tab==='events'&&<Events events={events} joined={joined} toggle={toggleJoin}/>}
-      {tab==='chat'&&<Chat/>}{role==='teacher'&&tab==='events'&&<TeacherPanel me={me} onCreated={loadData}/>}
+      {tab==='chat'&&<Chat/>}{tab==='moderation'&&role==='teacher'&&<ModerationPanel me={me} onChanged={loadData}/>} {role==='teacher'&&tab==='events'&&<TeacherPanel me={me} onCreated={loadData}/>} 
       {tab==='profile'&&<Profile me={me} bought={bought} buy={n=>setBought(v=>v.includes(n)?v:[...v,n])}/>}
     </main>
-    <nav>{([['home','⌂','Главная'],['search','⌕','Люди'],['events','✦','Ивенты'],['chat','◌','Чаты'],['profile','◉','Профиль']] as const).map(x=><button className={tab===x[0]?'on':''} onClick={()=>setTab(x[0])} key={x[0]}><span>{x[1]}</span><small>{x[2]}</small></button>)}</nav>
+    <nav>{([['home','⌂','Главная'],['search','⌕','Люди'],['events','✦','Ивенты'],['chat','◌','Чаты'],['profile','◉','Профиль'],...(role==='teacher'?[['moderation','✓','Заявки']]:[])] as const).map(x=><button className={tab===x[0]?'on':''} onClick={()=>setTab(x[0])} key={x[0]}><span>{x[1]}</span><small>{x[2]}</small></button>)}</nav>
     {selected&&<div className="modal"><div><Profile me={selected} bought={[]} buy={()=>{}} compact/><Button stretched mode="secondary" onClick={()=>setSelected(null)}>Закрыть</Button></div></div>}
   </div>;
 }
@@ -100,6 +100,18 @@ function Title({t}:{t:string}){return <h2>{t}<button>Все →</button></h2>}
 function Event({e,joined,toggle}:{e:readonly (string|number)[];joined:boolean;toggle:(id:string)=>void}){return <article className="event"><div className="cover">{e[5]}</div><div><small>{e[2]} · {e[3]}</small><h3>{e[1]}</h3><p>{e[4]}</p><footer><span>⚡ {e[6]} XP</span><span>🪙 {e[7]}</span><span>👥 {e[8]}</span><Button size="small" mode={joined?'secondary':'primary'} onClick={()=>toggle(String(e[0]))}>{joined?'Участвую':'Участвовать'}</Button></footer></div></article>}
 function Search({q,setQ,results,open}:{q:string;setQ:(s:string)=>void;results:User[];open:(u:User)=>void}){return <><Typography.Headline>Поиск людей</Typography.Headline><p className="sub">Имя, фамилия, класс или интерес.</p><SearchInput placeholder="Имя, фамилия, #Python, 8Б…" value={q} onChange={(e:any)=>setQ(e.target.value)}/><div className="chips">{['#Python','#Игры','#Фото','#Dota 2'].map(x=><button onClick={()=>setQ(x.slice(1))} key={x}>{x}</button>)}</div>{results.map(u=><button className="result" key={u.id} onClick={()=>open(u)}><Avatar.Container size={54} form="squircle"><Avatar.Image src={u.avatar}/></Avatar.Container><div><b>{u.name}</b><small>{u.className}</small><span>{u.tags.map(t=>'#'+t).join(' ')||'Профиль EDU.GAME'}</span></div><i>→</i></button>)}</>}
 function Events({events,joined,toggle}:{events:readonly (readonly [string,string,string,string,string,string,number,number,number])[];joined:string[];toggle:(id:string)=>void}){return <><Typography.Headline>Ивенты</Typography.Headline><p className="sub">Участие приносит XP, валюту и достижения.</p>{events.map(e=><Event e={e} joined={joined.includes(e[0])} toggle={toggle} key={e[0]}/>)}</>}
+function ModerationPanel({me,onChanged}:{me:User;onChanged:()=>void}){
+ const [items,setItems]=useState<any[]>([]); const [busy,setBusy]=useState<string|null>(null);
+ useEffect(()=>{load();},[]);
+ async function load(){ if(!supabase)return; const {data}=await supabase.from('event_proposals').select('id,status,comment,event_id,events!inner(id,title,description,event_type,xp_reward,coin_reward,creator_id)').eq('teacher_id',me.id).eq('status','pending'); setItems(data||[]); }
+ async function decide(id:string,eventId:string,status:'approved'|'rejected'){
+   if(!supabase)return; setBusy(id);
+   await supabase.from('event_proposals').update({status,decided_at:new Date().toISOString()}).eq('id',id);
+   await supabase.from('events').update({status}).eq('id',eventId);
+   await load(); onChanged(); setBusy(null);
+ }
+ return <section><Typography.Headline>Заявки</Typography.Headline><p className="sub">Здесь учитель подтверждает ивенты перед публикацией.</p>{items.length===0&&<div className="empty">Новых заявок нет.</div>}{items.map(x=><article className="proposal" key={x.id}><small>{x.events.event_type}</small><h3>{x.events.title}</h3><p>{x.events.description||'Без описания'}</p><div className="proposal-meta">⚡ {x.events.xp_reward} XP · 🪙 {x.events.coin_reward}</div><div className="proposal-actions"><Button size="small" onClick={()=>decide(x.id,x.event_id,'approved')} disabled={busy===x.id}>Подтвердить</Button><Button size="small" mode="secondary" onClick={()=>decide(x.id,x.event_id,'rejected')} disabled={busy===x.id}>Отклонить</Button></div></article>)}</section>
+}
 function TeacherPanel({me,onCreated}:{me:User;onCreated:()=>void}){
  const [title,setTitle]=useState(''); const [description,setDescription]=useState(''); const [type,setType]=useState('class'); const [xp,setXp]=useState(200); const [coins,setCoins]=useState(50); const [message,setMessage]=useState('');
  const create=async()=>{
