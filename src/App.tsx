@@ -31,14 +31,14 @@ export default function App() {
   const [role,setRole]=useState<Role>('student');
   const [logged,setLogged]=useState(false);
   const [q,setQ]=useState('');
-  const [selected,setSelected]=useState<User|null>(null);
+  const [selected,setSelected]=useState<User|null>(null); const [selectedEvent,setSelectedEvent]=useState<any|null>(null);
   const [joined,setJoined]=useState<string[]>([]);
   const [bought,setBought]=useState<string[]>([]);
   const [users,setUsers]=useState<User[]>(demoUsers);
   const [events,setEvents]=useState(demoEvents);
   const [loading,setLoading]=useState(false);
 
-  useEffect(()=>{ loadData(); },[]);
+  useEffect(()=>{ loadData(); },[]); useEffect(()=>{const h=(ev:any)=>setSelectedEvent(ev.detail); window.addEventListener('edugame:event',h); return()=>window.removeEventListener('edugame:event',h)},[]);
 
   async function loadData(){
     if(!supabase) return;
@@ -84,7 +84,7 @@ export default function App() {
       {tab==='profile'&&<Profile me={me} bought={bought} buy={n=>setBought(v=>v.includes(n)?v:[...v,n])}/>}
     </main>
     <nav>{([['home','⌂','Главная'],['search','⌕','Люди'],['events','✦','Ивенты'],['chat','◌','Чаты'],['profile','◉','Профиль'],['class','🏫','Класс'],['invites','✉','Приглашения'],...(role==='teacher'?[['moderation','✓','Заявки']]:[])] as const).map(x=><button className={tab===x[0]?'on':''} onClick={()=>setTab(x[0])} key={x[0]}><span>{x[1]}</span><small>{x[2]}</small></button>)}</nav>
-    {selected&&<div className="modal"><div><Profile me={selected} bought={[]} buy={()=>{}} compact/><Button stretched mode="secondary" onClick={()=>setSelected(null)}>Закрыть</Button></div></div>}
+    {selectedEvent&&<EventDetails e={selectedEvent} joined={joined.includes(String(selectedEvent[0]))} toggle={toggleJoin} close={()=>setSelectedEvent(null)}/>} {selected&&<div className="modal"><div><Profile me={selected} bought={[]} buy={()=>{}} compact/><Button stretched mode="secondary" onClick={()=>setSelected(null)}>Закрыть</Button></div></div>}
   </div>;
 }
 
@@ -97,7 +97,10 @@ function Home({me,events,joined,toggle}:{me:User;events:readonly (readonly [stri
 }
 function Card(p:{a:string;b:string;c:string}){return <div className="card"><span>{p.a}</span><b>{p.b}</b><small>{p.c}</small></div>}
 function Title({t}:{t:string}){return <h2>{t}<button>Все →</button></h2>}
-function Event({e,joined,toggle}:{e:readonly (string|number)[];joined:boolean;toggle:(id:string)=>void}){return <article className="event"><div className="cover">{e[5]}</div><div><small>{e[2]} · {e[3]}</small><h3>{e[1]}</h3><p>{e[4]}</p><footer><span>⚡ {e[6]} XP</span><span>🪙 {e[7]}</span><span>👥 {e[8]}</span><Button size="small" mode={joined?'secondary':'primary'} onClick={()=>toggle(String(e[0]))}>{joined?'Участвую':'Участвовать'}</Button></footer></div></article>}
+function Event({e,joined,toggle}:{e:readonly (string|number)[];joined:boolean;toggle:(id:string)=>void}){return <article className="event"><div className="cover">{e[5]}</div><div><small>{e[2]} · {e[3]}</small><h3>{e[1]}</h3><p>{e[4]}</p><footer><span>⚡ {e[6]} XP</span><span>🪙 {e[7]}</span><span>👥 {e[8]}</span><Button size="small" mode={joined?'secondary':'primary'} onClick={()=>toggle(String(e[0]))}>{joined?'Участвую':'Участвовать'}</Button><button className="event-open" onClick={()=>window.dispatchEvent(new CustomEvent('edugame:event',{detail:e}))}>Подробнее</button></footer></div></article>}
+function EventDetails({e,joined,toggle,close}:{e:any;joined:boolean;toggle:(id:string)=>void;close:()=>void}){
+ return <div className="modal event-modal"><div><button className="close-x" onClick={close}>×</button><div className="event-hero"><span>{e[5]}</span><small>{e[2]} · {e[3]}</small><h1>{e[1]}</h1></div><div className="event-detail-grid"><div><b>⚡ {e[6]}</b><small>XP</small></div><div><b>🪙 {e[7]}</b><small>монет</small></div><div><b>👥 {e[8]}</b><small>участников</small></div></div><h3>О мероприятии</h3><p>Участвуй, собирай команду и получай награды за завершение.</p><div className="event-info"><span>📍 Школьная площадка</span><span>📅 {e[3]}</span><span>🏆 Награды выдаются после завершения</span></div><Button stretched onClick={()=>toggle(String(e[0]))}>{joined?'Вы участвуете':'Участвовать'}</Button><Button stretched mode="secondary" onClick={close}>Закрыть</Button></div></div>
+}
 function Search({q,setQ,results,open}:{q:string;setQ:(s:string)=>void;results:User[];open:(u:User)=>void}){return <><Typography.Headline>Поиск людей</Typography.Headline><p className="sub">Имя, фамилия, класс или интерес.</p><SearchInput placeholder="Имя, фамилия, #Python, 8Б…" value={q} onChange={(e:any)=>setQ(e.target.value)}/><div className="chips">{['#Python','#Игры','#Фото','#Dota 2'].map(x=><button onClick={()=>setQ(x.slice(1))} key={x}>{x}</button>)}</div>{results.map(u=><button className="result" key={u.id} onClick={()=>open(u)}><Avatar.Container size={54} form="squircle"><Avatar.Image src={u.avatar}/></Avatar.Container><div><b>{u.name}</b><small>{u.className}</small><span>{u.tags.map(t=>'#'+t).join(' ')||'Профиль EDU.GAME'}</span></div><i>→</i></button>)}</>}
 function Events({events,joined,toggle}:{events:readonly (readonly [string,string,string,string,string,string,number,number,number])[];joined:string[];toggle:(id:string)=>void}){return <><Typography.Headline>Ивенты</Typography.Headline><p className="sub">Участие приносит XP, валюту и достижения.</p>{events.map(e=><Event e={e} joined={joined.includes(e[0])} toggle={toggle} key={e[0]}/>)}</>}
 function InvitesPanel({me}:{me:User}){
