@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Avatar, Button, Typography } from '@maxhub/max-ui';
 import { supabase } from './lib/supabase';
 import './styles.css';
+import MathBreak from './MathBreak';
 
 type Role = 'student' | 'teacher';
 type Tab = 'home' | 'search' | 'events' | 'chat' | 'profile' | 'moderation' | 'class' | 'invites';
@@ -29,6 +30,7 @@ const demoEvents = [
 const shop = [['🪐','Космический фон',320],['🎮','Пиксельный аватар',180],['⚡','Неоновая рамка',250],['🐉','Драконий бейдж',500]] as const;
 
 export default function App() {
+  if (window.location.pathname === '/math-break' || window.location.pathname === '/math-break/') return <MathBreak />;
   const [tab,setTab]=useState<Tab>('home');
   const [role,setRole]=useState<Role>('student');
   const [logged,setLogged]=useState(false);
