@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/math-break", "destination": "/math-warmup-7/index.html" },
+    { "source": "/math-break/", "destination": "/math-warmup-7/index.html" }
+  ]
+}
